@@ -1,0 +1,19 @@
+name: Helper regression tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell syntax
+        run: |
+          /bin/sh -n install.sh
+          /bin/sh -n Install.command
+          /bin/sh -n launcher/launch
+          /bin/sh -n updater/install.sh
+      - name: Isolated regression tests
+        run: /usr/bin/python3 -B -m unittest discover -s tests -v
+      - name: Compile AppleScript
+        run: osacompile -o "$RUNNER_TEMP/helper.scpt" updater/helper.applescript

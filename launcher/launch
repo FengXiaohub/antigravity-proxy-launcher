@@ -1,0 +1,8 @@
+#!/bin/sh
+# Original GUI entry; no global environment or system configuration changes.
+HERE=$(CDPATH= cd -- "$(/usr/bin/dirname -- "$0")" && /bin/pwd)
+if [ -x /usr/bin/python3 ] && [ -f "$HERE/../Resources/launcher.py" ] && [ -f "$HERE/../Resources/helper_state.py" ]; then
+    exec /usr/bin/python3 -B "$HERE/../Resources/launcher.py" "$@"
+fi
+/usr/bin/osascript -e 'display alert "Antigravity 代理启动" message "启动器组件不完整，请联系维护人员恢复原启动器。" as warning' >/dev/null 2>&1
+exit 1

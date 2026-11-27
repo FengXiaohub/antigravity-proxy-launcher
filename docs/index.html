@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antigravity 代理启动 · 不用 TUN，也能让 Antigravity 正常联网</title>
+<meta name="description" content="两个 macOS 小工具：让 Google Antigravity 在规则模式 + 系统代理下正常登录与使用 Agent，无需开启 TUN；并按正确顺序安装 Antigravity 更新。">
+<style>
+  :root{
+    --bg:#0b1017; --panel:#121a24; --panel2:#0f1620; --line:#1f2b38;
+    --text:#e6edf3; --dim:#93a4b5; --accent:#4da3ff; --accent2:#7c5cff;
+    --ok:#3fb950; --warn:#d29922;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro SC","PingFang SC","Helvetica Neue",Arial,sans-serif;
+    line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:880px;margin:0 auto;padding:0 22px}
+  header{padding:72px 0 48px;border-bottom:1px solid var(--line)}
+  .badge{display:inline-block;font-size:12px;letter-spacing:.08em;color:var(--dim);
+    border:1px solid var(--line);border-radius:999px;padding:4px 12px;margin-bottom:20px}
+  h1{font-size:40px;line-height:1.25;margin:0 0 14px;letter-spacing:-.02em}
+  h1 .grad{background:linear-gradient(90deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:17px;color:var(--dim);margin:0 0 26px;max-width:680px}
+  .cta{display:flex;gap:12px;flex-wrap:wrap}
+  .btn{display:inline-block;padding:10px 18px;border-radius:10px;font-size:14px;font-weight:600}
+  .btn.primary{background:var(--accent);color:#06101c}
+  .btn.ghost{border:1px solid var(--line);color:var(--text)}
+  .btn:hover{text-decoration:none;filter:brightness(1.08)}
+  section{padding:44px 0;border-bottom:1px solid var(--line)}
+  h2{font-size:22px;margin:0 0 18px;letter-spacing:-.01em}
+  h3{font-size:16px;margin:24px 0 8px}
+  p{margin:0 0 14px}
+  .dim{color:var(--dim)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card h3{margin-top:0}
+  .card .tag{font-size:12px;color:var(--dim)}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 6px}
+  th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--dim);font-weight:600;font-size:13px}
+  code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  code{background:#18212c;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px}
+  pre{background:var(--panel2);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;overflow:auto;font-size:13px;line-height:1.6}
+  pre code{background:none;border:none;padding:0}
+  ol,ul{padding-left:22px;margin:0 0 14px}
+  li{margin:6px 0}
+  .flow{list-style:none;padding:0;counter-reset:s}
+  .flow li{position:relative;padding:10px 0 10px 44px;border-bottom:1px dashed var(--line);counter-increment:s}
+  .flow li:last-child{border-bottom:none}
+  .flow li::before{content:counter(s);position:absolute;left:0;top:12px;width:26px;height:26px;
+    border-radius:50%;background:#1b2735;border:1px solid var(--line);color:var(--accent);
+    font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .note{background:rgba(77,163,255,.08);border:1px solid rgba(77,163,255,.28);
+    border-radius:12px;padding:14px 16px;font-size:14px;margin:16px 0}
+  .note.warn{background:rgba(210,153,34,.08);border-color:rgba(210,153,34,.3)}
+  footer{padding:34px 0 60px;color:var(--dim);font-size:13px}
+  .kbd{font-family:ui-monospace,monospace;background:#18212c;border:1px solid var(--line);
+    border-bottom-width:2px;border-radius:5px;padding:0 5px;font-size:12px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="badge">macOS · Apple Silicon · 无需 sudo</span>
+    <h1>不用 TUN，也能让 <span class="grad">Antigravity</span><br>正常登录与使用 Agent</h1>
+    <p class="lede">
+      在本机验证的版本中，Antigravity 后台没有跟随系统代理。
+      这两个非官方工具为它注入本地代理环境，并辅助安装已经下载好的官方更新包。
+    </p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/FengXiaohub/antigravity-proxy-launcher">查看源码</a>
+      <a class="btn ghost" href="#install">安装方式</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>问题出在哪</h2>
+    <p>
+      Antigravity 的登录与 Agent 通道不在主界面进程里，而由独立后台进程负责：
+    </p>
+    <pre><code>/Applications/Antigravity.app/Contents/Resources/bin/language_server</code></pre>
+    <p>
+      本机排查显示，这个 Go 后台通过环境变量使用代理；从官方图标启动时没有继承预期代理配置，
+      在受限网络下可能登录超时。代理启动器为它提供 <code>HTTP_PROXY</code>、<code>HTTPS_PROXY</code> 等变量。
+    </p>
+    <p>这一结论适用于本机验证过的版本，不保证未来版本仍使用相同路径或网络机制。</p>
+    <p class="dim">表现：窗口能打开，但登不上、Agent 用不了。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>为什么不用 TUN</h2>
+    <p>适合需要保持规则模式和系统代理，或希望避免新增虚拟网卡的用户。本工具不启用 TUN，也不改全局网络配置。</p>
+    <p class="dim">TUN 的表现取决于客户端和配置。Mihomo 支持多种协议栈及路由排除项，不能概括为全部使用 gVisor 或无法排除路由。
+      参见 <a href="https://wiki.metacubex.one/config/inbound/tun/">Mihomo 官方说明</a>。</p>
+    <div class="note">
+      <strong>所以本项目的取舍是：</strong>不碰整机网络，只调整一个进程启动瞬间的环境变量。
+      影响面被压缩到 Antigravity 一个 App。
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>两个工具</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Antigravity 代理启动</h3>
+        <p class="tag">每次打开 Antigravity 时用</p>
+        <p>探测本地代理端口 → 验证真的能出网 → 注入环境变量 → <code>execve</code> 官方二进制。</p>
+      </div>
+      <div class="card">
+        <h3>agy update</h3>
+        <p class="tag">右上角出现「重启更新」时用</p>
+        <p>校验已下载的包 → 正常退出 → 整包替换 → 复验 → 失败尝试恢复。最多保留一份旧版原件。</p>
+      </div>
+    </div>
+    <p style="margin-top:16px" class="dim">双击才工作，没有独立常驻服务；启动器最终由官方进程替代。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>启动器是怎么做的</h2>
+    <ol class="flow">
+      <li>读 <code>scutil --proxy</code>，取出 HTTP / HTTPS / SOCKS 端点，且只接受本机回环地址</li>
+      <li>逐个 <code>nc -z</code> 探活——端口「开着」不代表「能用」</li>
+      <li>用 <code>curl</code> 请求 <code>generate_204</code>，必须真的拿到 <code>204</code> 才算通过</li>
+      <li>都不行则回退常见端口：7890 / 7891 / 7893 / 7897 / 1080 / 12000</li>
+      <li>检查「上次更新是否未完成」和「是否已有实例在跑」（只激活现有窗口，无法补注入代理；来源无法确认时弹窗说明）</li>
+      <li>注入 6 个代理变量 + 内网 NO_PROXY，然后 <code>execve</code> 官方二进制</li>
+    </ol>
+    <div class="note warn">
+      <strong>为什么必须用 <code>execve</code>：</strong>
+      macOS 上的 <code>open --env KEY=VALUE</code> 在部分版本（实测 27.x）不会把变量传进被启动的 App，
+      而父进程 <code>execve</code> 的环境继承是确定的。
+    </div>
+  </div>
+</section>
+
+<section id="install">
+  <div class="wrap">
+    <h2>安装</h2>
+    <ol>
+      <li>从 GitHub 的 <strong>Code → Download ZIP</strong> 下载并解压整个仓库。</li>
+      <li>双击 <strong>Install.command</strong>，终端窗口自动执行安装，结束后弹窗显示结果，无需输入命令。</li>
+      <li>结果显示成功后，使用自己 <code>~/Applications</code> 中原来的两个图标。</li>
+    </ol>
+    <p>需先安装官方 Antigravity，并有可运行的 Apple 命令行工具与 Python 3。首次运行可能需要先完成 Apple 的命令行工具安装提示。</p>
+    <p>安装器先构建、验证，再原位替换助手；失败会尝试恢复。只注册原来的两个助手，不创建第二份可运行的 Antigravity。安装也会写入用户级恢复记录。</p>
+    <div class="note warn">当前实机验证范围为 macOS 27.2.1、Apple Silicon。本项目没有 Apple 开发者签名与公证，首次双击 Install.command 可能被 Gatekeeper 拦截：请右键「打开」，或到「系统设置 → 隐私与安全性」点「仍要打开」。不要执行 <code>spctl --master-disable</code> 关闭整机安全策略。更新时若需要「App 管理」权限，见 README 说明。</div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>常见弹窗与处理</h2>
+    <table>
+      <tr><th style="width:230px">弹窗</th><th>含义与处理</th></tr>
+      <tr><td>没有找到可用的本地代理</td><td>没有探测到可用的本机代理端口，或系统代理未开启。先打开代理客户端（VPN 客户端），连接节点并开启「系统代理」（规则模式即可），再双击重试</td></tr>
+      <tr><td>本地代理端口有响应，但 Google 连接预检在等待上限内未成功</td><td>端口通，但通过代理请求 Google <code>generate_204</code> 超时或没有返回预期结果；这不代表所有 Google 服务都不可用。先确认代理客户端已连接，稍后重试；持续失败再检查或<strong>更换节点</strong></td></tr>
+      <tr><td>Antigravity 已经在运行，本次只能激活窗口</td><td>现有进程无法确认由本启动器打开，启动器只能激活窗口，不能给它补上代理。若登录或连接失败，按 <span class="kbd">⌘</span> <span class="kbd">Q</span> 完全退出后再点代理启动器</td></tr>
+      <tr><td>Antigravity 已在运行，但窗口没有激活</td><td>已有 Antigravity 进程，但启动器请求系统激活窗口失败。从 Dock 打开；若一直未响应，先正常退出再试</td></tr>
+      <tr><td>正在检查或安装更新</td><td>「agy update」正在占用操作锁。等更新窗口结束后再打开</td></tr>
+      <tr><td>上次更新尚未完成</td><td>发现未完成的更新记录（替换中途被打断）。先双击「agy update」恢复，再打开 Antigravity</td></tr>
+      <tr><td>没有找到可运行的 Antigravity</td><td>主程序缺失或不可执行。先双击「agy update」检查是否需要恢复旧版</td></tr>
+      <tr><td>没有找到已下载的新更新包（agy update）</td><td>本地没有已下载的更新包，不代表线上没有新版本。先让 Antigravity 检查并下载更新，再双击「agy update」</td></tr>
+    </table>
+    <h3>更新与换节点</h3>
+    <ul>
+      <li><strong>端口改变时，完全退出后用代理启动器重开。</strong>仅切换节点且端口不变，通常无需重启；连接可能短暂中断。</li>
+      <li>等任务完成、正常退出后，手动双击 <strong>agy update</strong>。它会请求通过代理启动器重开；官方的 Reboot and Update 按钮没有接到本工具。</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>边界与安全</h2>
+    <ul>
+      <li><strong>不常驻</strong>：没有独立后台服务；更新恢复记录会保留在用户目录</li>
+      <li><strong>不改系统</strong>：不写系统代理、不改 DNS、不加开机自启、不动 <code>/etc</code></li>
+      <li><strong>不改包内文件</strong>：更新时整包替换，不修改 <code>app.asar</code>；要求 Google Team ID、完整签名及公证凭证</li>
+      <li><strong>保留官方身份</strong>：官方 bundle ID 不变；系统会注册两个辅助工具自己的图标。旧版恢复原件不注册为第二个官方 App</li>
+      <li><strong>不收集数据</strong>：无网络上报；日志在 <code>~/Library/Logs/AntigravityHelper.log</code>，不含凭据</li>
+      <li><strong>卸载</strong>：先确认没有未完成更新，再删除两个助手。日志、恢复状态与一份旧版原件不会自动消失；清理路径见 README，勿删会话目录</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      非官方本地辅助工具，与 Google 无关。启动时注入代理，更新时整包替换。<br>
+      已配置隔离回归测试，但修改后的完整真实升级、其他 Mac 和未来版本仍需验证。<br>
+      <a href="https://github.com/FengXiaohub/antigravity-proxy-launcher">GitHub</a> ·
+      <a href="https://github.com/FengXiaohub/antigravity-proxy-launcher/blob/main/LICENSE">MIT License</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>

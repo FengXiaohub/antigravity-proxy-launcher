@@ -1,0 +1,17 @@
+.DS_Store
+*.log
+__pycache__/
+*.pyc
+
+# Test fixtures left behind by interrupted runs
+tests/helper-fixture-*
+tests/tmp*
+
+# Build outputs
+*.scpt
+build/
+
+# Editors and local environments
+.vscode/
+.idea/
+.venv/
