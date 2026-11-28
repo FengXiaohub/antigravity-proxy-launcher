@@ -80,6 +80,7 @@
     <div class="cta">
       <a class="btn primary" href="https://github.com/FengXiaohub/antigravity-proxy-launcher">查看源码</a>
       <a class="btn ghost" href="#install">安装方式</a>
+      <a class="btn ghost" href="#localization">中文汉化兼容</a>
     </div>
   </div>
 </header>
@@ -165,6 +166,22 @@
   </div>
 </section>
 
+<section id="localization">
+  <div class="wrap">
+    <h2>装了中文汉化补丁能用吗？</h2>
+    <p>可以。<strong>已打静态汉化补丁（修改 <code>app.asar</code> / 本地重签名）的客户端无需先还原回英文</strong>，退出后直接双击 <strong>agy update</strong> 即可整包升级为最新 Google 官方签名版。</p>
+    <table>
+      <tr><th style="width:230px">汉化方式</th><th>代理启动</th><th>agy update 更新</th><th>更新后操作</th></tr>
+      <tr><td>扩展商店官方中文包（<code>Chinese (Simplified)</code>）</td><td>直接支持</td><td>直接支持</td><td>无需重装，语言包保留在用户目录</td></tr>
+      <tr><td>一键静态汉化补丁（修改 <code>app.asar</code> / 本地自签名）</td><td>直接支持</td><td><strong>直接支持（无需先还原）</strong></td><td>整包升级后会回到英文，按需重打一次补丁即可</td></tr>
+      <tr><td>需专属启动器开启调试端口的动态注入汉化</td><td>启动入口二选一（本工具不默认开调试端口）</td><td>直接支持</td><td>取决于对应工具</td></tr>
+    </table>
+    <div class="note">
+      <strong>提示：</strong>打过静态汉化补丁后，Antigravity 右上角自带的 <code>Reboot and Update</code> 常因原包签名改变而静默失败；退出客户端后用 <strong>agy update</strong> 即可直接安装已下载好的官方新包（旧版以完整文件指纹备份，万一失败可连同原汉化状态原样回滚）。之前装过旧版助手遇到过签名报错的用户，重新下载最新 ZIP 双击一次 <code>Install.command</code> 即可。
+    </div>
+  </div>
+</section>
+
 <section>
   <div class="wrap">
     <h2>常见弹窗与处理</h2>
@@ -183,7 +200,6 @@
     <ul>
       <li><strong>端口改变时，完全退出后用代理启动器重开。</strong>仅切换节点且端口不变，通常无需重启；连接可能短暂中断。</li>
       <li>等任务完成、正常退出后，手动双击 <strong>agy update</strong>。它会请求通过代理启动器重开；官方的 Reboot and Update 按钮没有接到本工具。</li>
-      <li><strong>兼容汉化补丁客户端直接更新：</strong>打过静态汉化补丁（本地重签名）的客户端无需先还原，可直接双击 <strong>agy update</strong> 整包升级到最新官方签名版；升级后界面恢复英文，按需重打一次汉化补丁即可。失败回滚会按更新前的文件指纹原样恢复旧版。</li>
     </ul>
   </div>
 </section>
