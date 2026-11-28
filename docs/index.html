@@ -183,6 +183,7 @@
     <ul>
       <li><strong>端口改变时，完全退出后用代理启动器重开。</strong>仅切换节点且端口不变，通常无需重启；连接可能短暂中断。</li>
       <li>等任务完成、正常退出后，手动双击 <strong>agy update</strong>。它会请求通过代理启动器重开；官方的 Reboot and Update 按钮没有接到本工具。</li>
+      <li><strong>兼容汉化补丁客户端直接更新：</strong>打过静态汉化补丁（本地重签名）的客户端无需先还原，可直接双击 <strong>agy update</strong> 整包升级到最新官方签名版；升级后界面恢复英文，按需重打一次汉化补丁即可。失败回滚会按更新前的文件指纹原样恢复旧版。</li>
     </ul>
   </div>
 </section>
@@ -193,7 +194,7 @@
     <ul>
       <li><strong>不常驻</strong>：没有独立后台服务；更新恢复记录会保留在用户目录</li>
       <li><strong>不改系统</strong>：不写系统代理、不改 DNS、不加开机自启、不动 <code>/etc</code></li>
-      <li><strong>不改包内文件</strong>：更新时整包替换，不修改 <code>app.asar</code>；要求 Google Team ID、完整签名及公证凭证</li>
+      <li><strong>不改包内文件</strong>：更新时整包替换，不修改 <code>app.asar</code>；新安装的更新包强制要求 Google Team ID、完整签名及公证凭证，旧版备份以完整文件指纹校验</li>
       <li><strong>保留官方身份</strong>：官方 bundle ID 不变；系统会注册两个辅助工具自己的图标。旧版恢复原件不注册为第二个官方 App</li>
       <li><strong>不收集数据</strong>：无网络上报；日志在 <code>~/Library/Logs/AntigravityHelper.log</code>，不含凭据</li>
       <li><strong>卸载</strong>：先确认没有未完成更新，再删除两个助手。日志、恢复状态与一份旧版原件不会自动消失；清理路径见 README，勿删会话目录</li>

@@ -43,8 +43,9 @@ class FakeUpdater(u.Updater):
         self.fail_postcheck = False
         self.external_installer = False
 
-    def validate(self, path, expected=None, assess=True):
+    def validate(self, path, expected=None, assess=True, official=True):
         found = fake_info(path)['CFBundleShortVersionString']
+        u.version(found)
         if expected and expected != found:
             raise u.Failure('version mismatch')
         if self.fail_postcheck and path == self.app and found == '2.36.0':
@@ -456,6 +457,102 @@ class ValidationTests(unittest.TestCase):
             self.assertEqual(u.main(['install.sh', 'typo']), 0)
             helper.assert_not_called()
             self.assertIn('FAIL', output.call_args[0][0])
+
+
+class LocalizedAppUpdateTests(unittest.TestCase):
+    """Exercise real Updater.validate / verify_backup when the installed app is localized."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='localized-fixture-', dir=Path(__file__).parent)
+        self.home = Path(self.temp.name)
+        self.app = self.home / 'Antigravity.app'
+        self.make_bundle(self.app, '2.35.1', localized=True)
+        self.helper = u.Updater(self.home, self.app)
+        marker = self.helper.launcher / 'Contents/MacOS/launch'
+        marker.parent.mkdir(parents=True)
+        marker.write_text('synthetic launcher marker')
+        self.candidate = self.helper.shipit / 'update.new/Antigravity.app'
+        self.make_bundle(self.candidate, '2.36.0', localized=False)
+        self.candidate_signed = True
+        self.helper.run = self.fake_run
+        self.helper.processes = lambda: []
+        self.helper.wait_ready = lambda: True
+        self.helper.backend_ready_now = lambda: True
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def make_bundle(self, path, release, localized=False):
+        (path / 'Contents/MacOS').mkdir(parents=True)
+        (path / 'Contents/Resources').mkdir(parents=True)
+        (path / 'Contents/Info.plist').write_bytes(plistlib.dumps({
+            'CFBundleIdentifier': 'com.google.antigravity',
+            'CFBundleExecutable': 'Antigravity',
+            'CFBundleShortVersionString': release,
+        }))
+        binary = path / 'Contents/MacOS/Antigravity'
+        binary.write_text('#!/bin/sh\nexit 0\n')
+        binary.chmod(0o755)
+        (path / 'Contents/Resources/app.asar').write_text(
+            'patched-zh-' + release if localized else 'official-en-' + release
+        )
+        if localized:
+            (path / 'Contents/Resources/app.asar.bak').write_text('official-en-' + release)
+
+    def fake_run(self, args, timeout=90):
+        if args[0] == '/usr/bin/codesign':
+            target = Path(args[-1])
+            asar = (target / 'Contents/Resources/app.asar').read_text()
+            ok = self.candidate_signed and asar.startswith('official-en-')
+            return subprocess.CompletedProcess(args, 0 if ok else 1, '', '' if ok else 'ad-hoc or modified')
+        if 'stapler' in args:
+            return subprocess.CompletedProcess(args, 0, 'The validate action worked!', '')
+        if args[0] == '/usr/bin/open':
+            return subprocess.CompletedProcess(args, 0, '', '')
+        raise AssertionError('Unexpected command in localized test: ' + str(args))
+
+    def test_localized_installed_app_updates_directly_to_official_release(self):
+        ready = self.helper.check()
+        self.assertTrue(ready.startswith('READY 2.35.1 2.36.0 '))
+        token = ready.split()[3]
+        self.assertEqual(self.helper.install(token), 'OK 2.36.0')
+        self.assertEqual((self.app / 'Contents/Resources/app.asar').read_text(), 'official-en-2.36.0')
+        self.assertFalse((self.app / 'Contents/Resources/app.asar.bak').exists())
+        state = u.read_json(self.helper.last)
+        self.assertRegex(state['before_digest'], r'^[0-9a-f]{64}$')
+        # If the user re-applies localization to 2.36.0, subsequent check() must not treat it as broken.
+        (self.app / 'Contents/Resources/app.asar').write_text('patched-zh-2.36.0')
+        (self.app / 'Contents/Resources/app.asar.bak').write_text('official-en-2.36.0')
+        self.assertEqual(self.helper.check(), 'NONE 2.36.0')
+
+    def test_localized_backup_rolls_back_intact_and_detects_backup_tampering(self):
+        token = self.helper.check().split()[3]
+        self.assertEqual(self.helper.install(token), 'OK 2.36.0')
+        self.assertEqual(self.helper.rollback(token), 'RESTORED 2.35.1')
+        self.assertEqual((self.app / 'Contents/Resources/app.asar').read_text(), 'patched-zh-2.35.1')
+        self.assertTrue((self.app / 'Contents/Resources/app.asar.bak').is_file())
+
+        # Re-run update and verify tampered localized backup is refused on rollback.
+        self.make_bundle(self.candidate, '2.36.0', localized=False)
+        token2 = self.helper.check().split()[3]
+        self.assertEqual(self.helper.install(token2), 'OK 2.36.0')
+        old = Path(u.read_json(self.helper.last)['old'])
+        (old / 'Contents/Resources/app.asar').write_text('corrupted-backup')
+        with self.assertRaisesRegex(u.Failure, '旧版备份完整性校验失败'):
+            self.helper.rollback(token2)
+
+    def test_unofficial_candidate_is_still_rejected_even_when_installed_app_is_localized(self):
+        self.candidate_signed = False
+        with self.assertRaisesRegex(u.Failure, 'Google 官方签名'):
+            self.helper.check()
+
+    def test_missing_executable_in_installed_app_offers_verified_localized_restore(self):
+        token = self.helper.check().split()[3]
+        self.assertEqual(self.helper.install(token), 'OK 2.36.0')
+        (self.app / 'Contents/MacOS/Antigravity').unlink()
+        self.assertEqual(self.helper.check(), 'RESTORE_READY 2.35.1 ' + token)
+        self.assertEqual(self.helper.rollback(token), 'RESTORED 2.35.1')
+        self.assertEqual((self.app / 'Contents/Resources/app.asar').read_text(), 'patched-zh-2.35.1')
 
 
 class LauncherTests(unittest.TestCase):

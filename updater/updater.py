@@ -201,7 +201,7 @@ class Updater:
                    ('Antigravity.app/' in command or 'com.google.antigravity' in command)
                    for _, command in self.processes())
 
-    def validate(self, path, expected=None, assess=True):
+    def validate(self, path, expected=None, assess=True, official=True):
         if path.is_symlink() or not path.is_dir():
             raise Failure('更新包路径异常或已经被官方更新器移动，请稍后重新检查。')
         data = info(path)
@@ -209,9 +209,18 @@ class Updater:
         version(found)
         if data.get('CFBundleIdentifier') != 'com.google.antigravity' or (expected and found != expected):
             raise Failure('应用身份或版本与确认内容不一致，已停止。')
+        if not official:
+            executable = data.get('CFBundleExecutable') or 'Antigravity'
+            if (not isinstance(executable, str) or '/' in executable or
+                    '\\' in executable or executable in ('', '.', '..')):
+                raise Failure('当前应用入口配置异常，已停止。')
+            binary = path / 'Contents/MacOS' / executable
+            if binary.is_symlink() or not binary.is_file() or not os.access(str(binary), os.X_OK):
+                raise Failure('当前应用主程序缺失或不可执行，未进行替换。')
+            return found
         result = self.run(['/usr/bin/codesign', '--verify', '--deep', '--strict', '-R', '=' + REQUIREMENT, str(path)])
         if result.returncode:
-            raise Failure('Google 签名或应用完整性校验失败，未安装该更新包。')
+            raise Failure('更新包的 Google 官方签名或完整性校验失败，未安装该更新包。')
         if assess:
             # A validated stapled ticket is independent of disabled Gatekeeper assessment.
             # Neither command changes policy or clears quarantine.
@@ -242,6 +251,17 @@ class Updater:
         if not os.access(str(self.app.parent), os.W_OK | os.X_OK):
             raise Failure('当前账户没有替换 Antigravity 的权限。请让管理员通过访达处理应用的安装权限后重试；本次未关闭或替换应用。')
 
+    def verify_backup(self, path, state):
+        digest = state.get('before_digest')
+        if digest is None:
+            return self.validate(path, state['before'], assess=False)
+        if not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest):
+            raise Failure('恢复记录不完整，备份已保留，请联系维护人员检查。')
+        found = self.validate(path, state['before'], assess=False, official=False)
+        if fingerprint(path) != digest:
+            raise Failure('旧版备份完整性校验失败，未执行恢复；备份已保留，请联系维护人员检查。')
+        return found
+
     def recovery_offer(self, state=None):
         if state is None:
             if not self.last.exists():
@@ -249,7 +269,7 @@ class Updater:
             state = read_json(self.last)
         if not re.fullmatch(r'[0-9a-f]{32}', state.get('token', '')):
             raise Failure('恢复记录不完整，备份已保留，请联系维护人员检查。')
-        self.validate(self.owned_path(state['old']), state['before'], assess=False)
+        self.verify_backup(self.owned_path(state['old']), state)
         return 'RESTORE_READY {} {}'.format(state['before'], state['token'])
 
     def finish_restore(self, state):
@@ -263,6 +283,8 @@ class Updater:
                 shutil.rmtree(str(failed))
             except OSError:
                 self.log('restored successfully; replacement cleanup deferred')
+        with contextlib.suppress(OSError):
+            self.owned_path(state['old']).parent.rmdir()
         self.log('restored and verified version ' + state['before'])
 
     def recover(self):
@@ -276,14 +298,14 @@ class Updater:
             self.restore(state)
             return 'RECOVERED ' + state['before']
         # Journal was durable before moving the original; the first move never happened.
-        if self.app.exists() and self.validate(self.app, state['before'], assess=False):
+        if self.app.exists() and self.verify_backup(self.app, state):
             self.finish_restore(state)
             return 'RECOVERED ' + state['before']
         raise Failure('发现未完成更新，但原件位置不符合预期。已停止；请联系维护人员恢复，备份未删除。')
 
     def restore(self, state):
         old = self.owned_path(state['old'])
-        self.validate(old, state['before'], assess=False)
+        self.verify_backup(old, state)
         self.ensure_writable()
         if self.app_processes(backend=True) or self.installer_active():
             raise Failure('应用或官方更新器仍在运行，未执行恢复。请正常退出后重试。')
@@ -298,7 +320,7 @@ class Updater:
             if failed.exists() and not self.app.exists():
                 durable_move(failed, self.app)
             raise Failure('旧版本未能恢复。备份仍保留，请联系维护人员处理。')
-        self.validate(self.app, state['before'], assess=False)
+        self.verify_backup(self.app, state)
         self.finish_restore(state)
 
     def choose(self, current):
@@ -355,19 +377,23 @@ class Updater:
                 return recovered
             if self.installer_active():
                 raise Failure('官方更新器正在运行，请等它结束后再试。')
+            if self.app.is_symlink():
+                raise Failure('当前应用路径是软链接，未进行检查或替换，请联系维护人员确认。')
+            if self.app.exists():
+                try:
+                    app_info = info(self.app)
+                except Failure:
+                    return self.recovery_offer()
+                if app_info.get('CFBundleIdentifier') not in (None, '', 'com.google.antigravity'):
+                    raise Failure('当前应用已被其他流程更改，未覆盖它；请联系维护人员确认。')
             try:
-                current = info(self.app).get('CFBundleShortVersionString')
-                version(current)
+                current = self.validate(self.app, assess=False, official=False)
             except Failure:
                 return self.recovery_offer()
             if self.last.exists():
                 last = read_json(self.last)
                 old = self.owned_path(last['old'])
                 if last.get('after') == current and old.is_dir():
-                    try:
-                        self.validate(self.app, current, assess=False)
-                    except Failure:
-                        return self.recovery_offer(last)
                     if last.get('phase') == 'installed':
                         if not self.backend_ready_now():
                             return 'WARN {} {}'.format(current, last['token'])
@@ -414,7 +440,7 @@ class Updater:
             plan = read_json(self.plan)
             if plan.get('token') != token or time.time() - plan.get('created', 0) > 1800:
                 raise Failure('这次更新确认已过期，请关闭窗口后重新双击检查。')
-            current = self.validate(self.app, plan['before'], assess=False)
+            current = self.validate(self.app, plan['before'], assess=False, official=False)
             candidate = translate_legacy_path(plan['candidate'], self.home)
             if not any(root.resolve() in candidate.resolve().parents for root in (self.root, self.scratch, self.shipit)):
                 raise Failure('更新暂存路径异常，已停止。')
@@ -434,8 +460,9 @@ class Updater:
             if fingerprint(candidate) != plan['digest'] or self.installer_active() or self.app_processes(backend=True):
                 raise Failure('更新文件或运行状态发生变化，未进行替换。请重新检查。')
             # Keep at most one previous original, including unconfirmed-startup cases.
-            # The currently installed app remains intact while older backups are removed.
-            self.validate(self.app, current, assess=False)
+            # Bind the outgoing bundle by digest so localized (re-signed) installs can update and roll back safely.
+            self.validate(self.app, current, assess=False, official=False)
+            before_digest = fingerprint(self.app)
             try:
                 self.prune_backups()
             except OSError as exc:
@@ -445,7 +472,8 @@ class Updater:
             transaction = self.root / ('transaction-' + token)
             transaction.mkdir(mode=0o700)
             old = transaction / 'previous.bundle'
-            state = dict(token=token, before=current, after=plan['after'], old=str(old), phase='prepared')
+            state = dict(token=token, before=current, after=plan['after'], old=str(old),
+                         before_digest=before_digest, phase='prepared')
             atomic_json(self.journal, state)
             try:
                 try:
@@ -547,7 +575,7 @@ class Updater:
             if state.get('token') != token:
                 raise Failure('恢复请求已失效，请联系维护人员检查现有备份。')
             # The replacement may be broken: authenticate the recovery original instead.
-            self.validate(self.owned_path(state['old']), state['before'], assess=False)
+            self.verify_backup(self.owned_path(state['old']), state)
             if self.app.exists():
                 try:
                     current = info(self.app)

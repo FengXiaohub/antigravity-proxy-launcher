@@ -72,7 +72,8 @@ macOS 13 及以后的「App 管理」保护会限制一个应用移动或替换�
 
 - 优先寻找 `~/Library/Caches/com.google.antigravity.ShipIt/update.*/Antigravity.app`，选择版本号更新的候选；回退到 `com.google.antigravity/pending/Antigravity.zip`。
 - ZIP 必须有 `update-info.json` 中的 SHA-512，实际比对后才解压；同时检查路径、链接、重复条目和解压体积上限。SHA-512 元数据本身不证明发布者身份。
-- 候选包必须通过 `codesign --verify --deep --strict`，约束 Google Team ID **EQHXZ8M8AV** 及 `com.google.antigravity`。还要求有效的 Apple 公证凭证：先验证 stapled ticket，必要时在 Gatekeeper 评估已启用的情况下评估；不会修改安全策略或清除 quarantine。
+- 候选更新包必须通过 `codesign --verify --deep --strict`，约束 Google Team ID **EQHXZ8M8AV** 及 `com.google.antigravity`。还要求有效的 Apple 公证凭证：先验证 stapled ticket，必要时在 Gatekeeper 评估已启用的情况下评估；不会修改安全策略或清除 quarantine。
+- **兼容已打汉化补丁的客户端直接更新**：新安装的候选包始终强制校验 Google 官方签名与公证，但当前已安装的 `/Applications/Antigravity.app` 即使打过修改 `app.asar` 的中文汉化补丁（本地重签名），也**无需先还原**即可直接用 `agy update` 升级。更新前会为当前旧版记录完整文件指纹（SHA-256），替换中断或回滚时按该指纹原样恢复旧版（保留原汉化状态）。由于升级是整包替换为新的官方原版，更新完成后界面会恢复英文，按需重新运行一次汉化工具即可（若使用的是扩展商店官方中文语言包插件，更新后无需重装）。
 - 以确认票据、过期时间及文件指纹绑定用户刚刚确认的包；拒绝降级、跨卷替换、无法写入或发现官方 ShipIt 正在更新的情况。
 - 正常请求退出并等待，不强制杀进程。只移动、替换整个官方包，不改包内文件，保留原有 ElectronAsarIntegrity。
 - 操作前落盘恢复记录，替换失败尝试回滚；中断后下次双击检查恢复。主程序缺失或损坏且存在可信旧版时，弹窗确认后可恢复。

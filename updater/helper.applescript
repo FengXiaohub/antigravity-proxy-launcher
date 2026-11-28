@@ -31,7 +31,7 @@ on run
 			set curVer to item 2 of parts
 			set newVer to item 3 of parts
 			set ticket to item 4 of parts
-			set updateChoice to display dialog "更新包已通过校验，准备从 " & curVer & " 更新到 " & newVer & "。" & return & return & "会先正常退出 Antigravity，进行中的任务会中断。请等任务完成后再继续。" & return & "会保留最近一次旧版本，以便失败时恢复。" buttons {"取消", "继续更新"} default button "取消" cancel button "取消" with icon caution with title T
+			set updateChoice to display dialog "更新包已通过校验，准备从 " & curVer & " 更新到 " & newVer & "。" & return & return & "会先正常退出 Antigravity，进行中的任务会中断。请等任务完成后再继续。" & return & "整包替换为官方新版（如装过汉化补丁，更新后重打一次即可）；会保留最近一次旧版本以便恢复。" buttons {"取消", "继续更新"} default button "取消" cancel button "取消" with icon caution with title T
 			if button returned of updateChoice is "继续更新" then
 				with timeout of 600 seconds
 					set inst to do shell script "/bin/sh " & base & " install " & quoted form of ticket
